@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ahora">
+<meta name="application-name" content="Ahora">
+<meta name="theme-color" content="#0a0b0f">
+<title>Ahora · Horario</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0b0f; --surface:#13161c; --surface-2:#191d25; --border:#21262f;
+    --now:#c8f135; --now-dim:rgba(200,241,53,.13);
+    --warm:#f5a623;
+    --past:#525a68; --future:#9aa3b2;
+    --text:#e9edf3; --muted:#8a93a2; --muted2:#5b6472;
+    --danger:#f0536b;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;min-height:100%}
+  body{max-width:560px;margin:0 auto;padding:18px 16px calc(28px + env(safe-area-inset-bottom));
+    padding-top:calc(18px + env(safe-area-inset-top))}
+  .eyebrow{font-family:var(--mono);font-size:.62rem;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--muted2);font-weight:500}
+
+  /* ── top bar ───────────────────────────── */
+  .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px}
+  .top h1{font-family:var(--disp);font-size:.92rem;font-weight:700;letter-spacing:.04em}
+  .clock{margin-top:4px;font-size:.74rem;color:var(--muted);letter-spacing:.02em}
+  .clock b{color:var(--text);font-weight:500}
+  .seg{display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;flex-shrink:0}
+  .seg button{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;
+    background:transparent;color:var(--muted);border:0;padding:7px 9px;cursor:pointer}
+  .seg button.on{background:var(--now);color:#0a0b0f;font-weight:700}
+
+  /* ── AHORA hero ────────────────────────── */
+  .now{background:var(--surface);border:1px solid var(--border);border-radius:18px;
+    padding:20px 18px 18px;position:relative;overflow:hidden}
+  .now.active{border-color:rgba(200,241,53,.35);box-shadow:0 0 0 1px rgba(200,241,53,.12),0 18px 50px -28px rgba(200,241,53,.4)}
+  .now .lead{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--now);box-shadow:0 0 12px var(--now);
+    animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+  .now-emoji{font-size:2.7rem;line-height:1;margin-bottom:10px}
+  .now-title{font-family:var(--disp);font-weight:700;font-size:1.72rem;line-height:1.12;
+    letter-spacing:-.01em}
+  .now.active .now-title{color:var(--now)}
+  .now-range{font-size:.78rem;color:var(--muted);margin-top:7px;letter-spacing:.03em}
+  .bar{height:5px;background:var(--surface-2);border-radius:99px;margin-top:18px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--now);border-radius:99px;
+    transition:width .5s ease}
+  .remain{margin-top:9px;font-size:.74rem;color:var(--warm);letter-spacing:.03em}
+  .now.idle .now-title{color:var(--future)}
+  .now.idle .now-emoji{filter:grayscale(.5);opacity:.85}
+
+  /* ── SIGUE ─────────────────────────────── */
+  .next{display:flex;align-items:center;gap:12px;background:var(--surface);
+    border:1px solid var(--border);border-radius:14px;padding:13px 15px;margin-top:12px}
+  .next .ne{font-size:1.5rem;line-height:1}
+  .next .nt{font-family:var(--disp);font-weight:500;font-size:.96rem}
+  .next .nl{font-size:.6rem;letter-spacing:.18em;text-transform:uppercase;color:var(--warm);
+    margin-bottom:3px;font-weight:500}
+  .next .when{margin-left:auto;text-align:right;font-size:.72rem;color:var(--muted)}
+  .next .when b{display:block;color:var(--text);font-size:.92rem;font-weight:500}
+
+  /* ── timeline ──────────────────────────── */
+  .day-head{display:flex;justify-content:space-between;align-items:center;margin:26px 2px 12px}
+  .day-head .edit{font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--now);
+    background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 11px;cursor:pointer}
+  .day-head .edit:hover{border-color:var(--now)}
+  ul{list-style:none}
+  .row{display:flex;align-items:center;gap:13px;padding:11px 4px;border-bottom:1px solid var(--border)}
+  .row:last-child{border-bottom:0}
+  .row .t{font-size:.72rem;color:var(--muted2);width:68px;flex-shrink:0;letter-spacing:0}
+  .row .e{font-size:1.05rem;width:22px;text-align:center;flex-shrink:0}
+  .row .l{font-family:var(--disp);font-size:.92rem;font-weight:500;color:var(--future)}
+  .row.past .t,.row.past .l{color:var(--past)}
+  .row.past .e{opacity:.45;filter:grayscale(.6)}
+  .row.cur{background:var(--now-dim);border-radius:11px;border-bottom-color:transparent;
+    margin:0 -6px;padding-left:10px;padding-right:10px}
+  .row.cur .t{color:var(--now)}
+  .row.cur .l{color:var(--text);font-weight:700}
+  .row.cur .tag{margin-left:auto;font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--now);display:flex;align-items:center;gap:6px}
+  .row.cur .tag .d{width:6px;height:6px;border-radius:50%;background:var(--now);box-shadow:0 0 8px var(--now);
+    animation:pulse 2.4s ease-in-out infinite}
+
+  /* ── editor ────────────────────────────── */
+  .editor{display:none;margin-top:26px;background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:16px}
+  .editor.open{display:block}
+  .editor .et{font-family:var(--disp);font-weight:700;font-size:1rem;margin-bottom:4px}
+  .editor .es{font-size:.7rem;color:var(--muted);margin-bottom:16px;line-height:1.5}
+  .er{display:flex;gap:8px;align-items:center;margin-bottom:9px}
+  .er input{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--border);
+    color:var(--text);border-radius:8px;padding:9px 8px;font-size:.82rem}
+  .er .it{width:84px;flex-shrink:0}
+  .er .ie{width:46px;text-align:center;flex-shrink:0;font-size:1rem}
+  .er .il{flex:1;min-width:0;font-family:var(--disp)}
+  .er .del{background:transparent;border:0;color:var(--muted2);font-size:1.2rem;cursor:pointer;
+    padding:4px 6px;flex-shrink:0}
+  .er .del:hover{color:var(--danger)}
+  .ebtns{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+  .ebtns button{font-family:var(--mono);font-size:.74rem;letter-spacing:.04em;border-radius:9px;
+    padding:10px 14px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text)}
+  .ebtns .add{color:var(--now);border-color:var(--now)}
+  .ebtns .save{background:var(--now);color:#0a0b0f;font-weight:700;border-color:var(--now)}
+  .ebtns .reset{color:var(--muted)}
+  .ebtns .reset:hover{color:var(--danger);border-color:var(--danger)}
+
+  .ics-btn{display:block;width:100%;margin-top:20px;font-family:var(--mono);font-size:.78rem;
+    letter-spacing:.03em;color:var(--now);background:transparent;border:1px solid var(--border);
+    border-radius:12px;padding:14px;cursor:pointer}
+  .ics-btn:hover{border-color:var(--now)}
+  .ics-hint{margin-top:8px;font-size:.64rem;color:var(--muted2);line-height:1.5;text-align:center}
+  .note{margin-top:22px;font-size:.66rem;color:var(--muted2);line-height:1.6;text-align:center}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--now);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){.dot,.row.cur .tag .d{animation:none}.bar i{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>AHORA</h1>
+    <div class="clock" id="clock"></div>
+  </div>
+  <div class="seg" id="seg">
+    <button data-type="semana">Entre sem</button>
+    <button data-type="finde">Finde</button>
+  </div>
+</div>
+
+<div class="now" id="now"></div>
+<div id="nextWrap"></div>
+
+<div class="day-head">
+  <span class="eyebrow">El día</span>
+  <button class="edit" id="editBtn">✎ Editar el día</button>
+</div>
+<ul id="timeline"></ul>
+
+<button id="icsBtn" class="ics-btn">↥ Exportar a Google Calendar (.ics)</button>
+<div class="ics-hint">Convierte cada bloque en un evento diario con aviso a su hora. Impórtalo en Google Calendar una vez y el teléfono te notifica entre tareas.</div>
+
+<div class="editor" id="editor">
+  <div class="et">Editar bloques</div>
+  <div class="es">Hora de inicio · emoji · qué haces. Cada bloque dura hasta que empieza el siguiente. Pon tus horas reales de trabajo, sueño y todo lo fijo.</div>
+  <div id="editRows"></div>
+  <div class="ebtns">
+    <button class="add" id="addRow">+ Bloque</button>
+    <button class="reset" id="resetBtn">↺ Plantilla</button>
+    <button class="save" id="saveBtn">Guardar</button>
+  </div>
+</div>
+
+<div class="note" id="note"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ── Plantilla por defecto (EDITABLE — son ejemplos, no tus horas reales) ──
+  const DEFAULTS = {
+    semana: [
+      {t:"06:00", e:"💪", l:"Despertar + mover 10 min"},
+      {t:"06:30", e:"☕", l:"Desayuno / café"},
+      {t:"07:00", e:"📝", l:"Tesis · bloque profundo"},
+      {t:"08:30", e:"🚪", l:"Prepararse / traslado"},
+      {t:"09:00", e:"💼", l:"Trabajo (Fiscalía) — ajusta la hora"},
+      {t:"13:00", e:"🍽", l:"Almuerzo"},
+      {t:"14:00", e:"💼", l:"Trabajo"},
+      {t:"17:00", e:"🚶", l:"Salida / traslado"},
+      {t:"18:00", e:"🍲", l:"Descanso / comer"},
+      {t:"19:00", e:"📝", l:"Tesis o proyecto"},
+      {t:"20:30", e:"🎧", l:"Tiempo libre"},
+      {t:"22:00", e:"🌙", l:"Cerrar pantallas"},
+      {t:"22:45", e:"😴", l:"Dormir"}
+    ],
+    finde: [
+      {t:"07:30", e:"💪", l:"Despertar + mover"},
+      {t:"08:00", e:"☕", l:"Desayuno"},
+      {t:"09:00", e:"📝", l:"Tesis · bloque profundo"},
+      {t:"11:00", e:"🌿", l:"Descanso"},
+      {t:"12:00", e:"💻", l:"Proyecto personal"},
+      {t:"14:00", e:"🍽", l:"Almuerzo"},
+      {t:"15:00", e:"🛒", l:"Tiempo libre / recados"},
+      {t:"18:00", e:"📖", l:"Tesis ligera / repaso"},
+      {t:"19:30", e:"🎮", l:"Tiempo libre"},
+      {t:"22:00", e:"🌙", l:"Cerrar pantallas"},
+      {t:"22:45", e:"😴", l:"Dormir"}
+    ]
+  };
+
+  const KEY = "horario_v1";
+  const DAYS = ["dom","lun","mar","mié","jue","vie","sáb"];
+  const MES  = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+  // ── Estado + persistencia (con respaldo en memoria si localStorage falla) ──
+  let store;
+  try { store = JSON.parse(localStorage.getItem(KEY) || "null"); } catch(_){ store=null; }
+  if (!store || !store.semana || !store.finde) store = clone(DEFAULTS);
+
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function persist(){
+    sort(store.semana); sort(store.finde);
+    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(_){ /* preview sin storage: vive en memoria */ }
+  }
+  function sort(arr){ arr.sort((a,b)=>toMin(a.t)-toMin(b.t)); }
+  function toMin(t){ const [h,m]=t.split(":").map(Number); return h*60+(m||0); }
+  function pad(n){ return String(n).padStart(2,"0"); }
+  function ampm(h){ return h<12 ? "AM" : "PM"; }
+  function h12(h){ const x=h%12; return x===0?12:x; }
+  function disp12(t){ const [h,m]=t.split(":").map(Number); return h12(h)+":"+pad(m)+" "+ampm(h); }
+  function fmt(min){ const h=Math.floor(min/60)%24, m=min%60; return h12(h)+":"+pad(m)+" "+ampm(h); }
+
+  // tipo de día: por defecto según hoy, pero el usuario puede cambiarlo en la sesión
+  let activeType = ([0,6].includes(new Date().getDay())) ? "finde" : "semana";
+
+  const $ = s => document.querySelector(s);
+  const elClock=$("#clock"), elNow=$("#now"), elNext=$("#nextWrap"),
+        elTl=$("#timeline"), elEd=$("#editor"), elRows=$("#editRows"), elNote=$("#note");
+
+  // ── Cálculo del bloque actual ─────────────────────────────────────────────
+  function compute(now){
+    const list = store[activeType];
+    const cur = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+    if (!list.length) return {state:"empty"};
+    if (cur < toMin(list[0].t)) return {state:"pre", first:list[0]};
+    let i=0;
+    for (let k=0;k<list.length;k++){ if (toMin(list[k].t) <= cur) i=k; }
+    const start = toMin(list[i].t);
+    const end   = (i+1<list.length) ? toMin(list[i+1].t) : 24*60;
+    const next  = (i+1<list.length) ? list[i+1] : null;
+    return {
+      state:"in", idx:i, block:list[i], next,
+      start, end,
+      progress: Math.max(0, Math.min(1, (cur-start)/(end-start))),
+      remain: Math.max(0, Math.round(end-cur)),
+      toNext: next ? Math.max(0, Math.round(toMin(next.t)-cur)) : null
+    };
+  }
+  function dur(min){ const h=Math.floor(min/60), m=min%60;
+    return h>0 ? (h+" h"+(m?" "+m+" min":"")) : (m+" min"); }
+
+  // ── Render hero AHORA + SIGUE ─────────────────────────────────────────────
+  function renderNow(){
+    const now=new Date(), c=compute(now);
+    const H=now.getHours();
+    elClock.innerHTML = DAYS[now.getDay()]+" "+now.getDate()+" "+MES[now.getMonth()]+
+      " · <b>"+h12(H)+":"+pad(now.getMinutes())+":"+pad(now.getSeconds())+" "+ampm(H)+"</b>";
+
+    if (c.state==="empty"){
+      elNow.className="now idle";
+      elNow.innerHTML='<div class="lead"><span class="eyebrow">Sin bloques</span></div>'+
+        '<div class="now-emoji">🗒️</div><div class="now-title">Arma tu día</div>'+
+        '<div class="now-range">Toca “Editar el día” para empezar.</div>';
+      elNext.innerHTML=""; return;
+    }
+    if (c.state==="pre"){
+      elNow.className="now idle";
+      elNow.innerHTML='<div class="lead"><span class="eyebrow">Aún no arranca</span></div>'+
+        '<div class="now-emoji">🌑</div><div class="now-title">Día en pausa</div>'+
+        '<div class="now-range">El primer bloque es a las '+disp12(c.first.t)+' · '+esc(c.first.l)+'</div>';
+      elNext.innerHTML="";
+      return;
+    }
+    const b=c.block;
+    elNow.className="now active";
+    elNow.innerHTML=
+      '<div class="lead"><span class="dot"></span><span class="eyebrow">Ahora · quedan '+dur(c.remain)+'</span></div>'+
+      '<div class="now-emoji">'+b.e+'</div>'+
+      '<div class="now-title">'+esc(b.l)+'</div>'+
+      '<div class="now-range">'+fmt(c.start)+' – '+fmt(c.end)+'</div>'+
+      '<div class="bar"><i style="width:'+(c.progress*100).toFixed(1)+'%"></i></div>'+
+      '<div class="remain">'+Math.round(c.progress*100)+'% del bloque · '+dur(c.remain)+' restantes</div>';
+
+    if (c.next){
+      elNext.innerHTML=
+        '<div class="next"><span class="ne">'+c.next.e+'</span><div>'+
+        '<div class="nl">Sigue · '+disp12(c.next.t)+'</div>'+
+        '<div class="nt">'+esc(c.next.l)+'</div></div>'+
+        '<div class="when">en<b>'+dur(c.toNext)+'</b></div></div>';
+    } else {
+      elNext.innerHTML='<div class="next"><span class="ne">✓</span><div>'+
+        '<div class="nl">Último bloque</div><div class="nt">Después, descansa</div></div></div>';
+    }
+  }
+
+  // ── Render línea del tiempo ───────────────────────────────────────────────
+  function renderTimeline(){
+    const c=compute(new Date()), list=store[activeType];
+    elTl.innerHTML = list.map((b,i)=>{
+      let cls="row";
+      if (c.state==="in" && i===c.idx) cls+=" cur";
+      else if (c.state==="in" && i<c.idx) cls+=" past";
+      else if (c.state==="pre") cls+=""; /* todo futuro */
+      const tag = (c.state==="in" && i===c.idx)
+        ? '<span class="tag"><span class="d"></span>ahora</span>' : '';
+      return '<li class="'+cls+'"><span class="t">'+disp12(b.t)+'</span>'+
+        '<span class="e">'+b.e+'</span><span class="l">'+esc(b.l)+'</span>'+tag+'</li>';
+    }).join("");
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+  // ── Editor ────────────────────────────────────────────────────────────────
+  function renderEditor(){
+    const list=store[activeType];
+    elRows.innerHTML = list.map((b,i)=>
+      '<div class="er" data-i="'+i+'">'+
+        '<input class="it" type="time" value="'+b.t+'">'+
+        '<input class="ie" type="text" maxlength="2" value="'+esc(b.e)+'">'+
+        '<input class="il" type="text" value="'+esc(b.l)+'">'+
+        '<button class="del" title="Quitar">×</button>'+
+      '</div>').join("");
+  }
+  function readEditor(){
+    const rows=[...elRows.querySelectorAll(".er")].map(r=>({
+      t:r.querySelector(".it").value || "00:00",
+      e:(r.querySelector(".ie").value||"•").trim()||"•",
+      l:(r.querySelector(".il").value||"").trim()||"Sin nombre"
+    }));
+    store[activeType]=rows; sort(store[activeType]);
+  }
+
+  // ── Exportar a Google Calendar (.ics) ──────────────────────────────────────
+  function icsEsc(s){ return String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+  function plusMin(t,add){ let [h,m]=t.split(":").map(Number); m+=add; h+=Math.floor(m/60); m=((m%60)+60)%60; h=((h%24)+24)%24; return pad(h)+pad(m)+"00"; }
+  function buildICS(){
+    sort(store.semana); sort(store.finde);
+    const now=new Date();
+    const date=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate());
+    const stamp=date+"T000000Z";
+    const out=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Ahora//Horario//ES","CALSCALE:GREGORIAN"];
+    function add(list,byday,tag){
+      list.forEach((b,i)=>{
+        const start=b.t.replace(":","")+"00";
+        const end = (i+1<list.length) ? list[i+1].t.replace(":","")+"00" : plusMin(b.t,30);
+        const txt = icsEsc(b.e+" "+b.l);
+        out.push(
+          "BEGIN:VEVENT",
+          "UID:ahora-"+tag+"-"+i+"@local",
+          "DTSTAMP:"+stamp,
+          "DTSTART:"+date+"T"+start,
+          "DTEND:"+date+"T"+end,
+          "RRULE:FREQ=WEEKLY;BYDAY="+byday,
+          "SUMMARY:"+txt,
+          "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+txt,"TRIGGER:-PT0M","END:VALARM",
+          "END:VEVENT"
+        );
+      });
+    }
+    add(store.semana,"MO,TU,WE,TH,FR","sem");
+    add(store.finde,"SA,SU","fin");
+    out.push("END:VCALENDAR");
+    return out.join("\r\n");
+  }
+  function exportICS(){
+    const blob=new Blob([buildICS()],{type:"text/calendar;charset=utf-8"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="horario-ahora.ics";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  }
+
+  // ── Eventos ───────────────────────────────────────────────────────────────
+  $("#seg").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b)return;
+    activeType=b.dataset.type; syncSeg(); renderNow(); renderTimeline();
+    if (elEd.classList.contains("open")) renderEditor();
+  });
+  function syncSeg(){ [...$("#seg").children].forEach(b=>b.classList.toggle("on",b.dataset.type===activeType)); }
+
+  $("#editBtn").addEventListener("click",()=>{
+    const open=elEd.classList.toggle("open");
+    $("#editBtn").textContent = open ? "✕ Cerrar" : "✎ Editar el día";
+    if(open){ renderEditor(); elEd.scrollIntoView({behavior:"smooth",block:"start"}); }
+  });
+  elRows.addEventListener("click",e=>{
+    if(e.target.classList.contains("del")){ e.target.closest(".er").remove(); }
+  });
+  $("#addRow").addEventListener("click",()=>{
+    readEditor(); store[activeType].push({t:"12:00",e:"•",l:"Nuevo bloque"}); renderEditor();
+  });
+  $("#saveBtn").addEventListener("click",()=>{
+    readEditor(); persist(); renderNow(); renderTimeline();
+    elEd.classList.remove("open"); $("#editBtn").textContent="✎ Editar el día";
+  });
+  $("#resetBtn").addEventListener("click",()=>{
+    if(confirm("¿Restaurar la plantilla de ejemplo para "+(activeType==="semana"?"entre semana":"fin de semana")+"? Se pierden tus cambios de este día.")){
+      store[activeType]=clone(DEFAULTS[activeType]); renderEditor();
+    }
+  });
+  $("#icsBtn").addEventListener("click", exportICS);
+
+  // ── Arranque ──────────────────────────────────────────────────────────────
+  syncSeg(); renderNow(); renderTimeline();
+  setInterval(renderNow, 1000);
+  // refresca la lista al cambiar de minuto (por si cambia el bloque actual)
+  let lastMin=new Date().getMinutes();
+  setInterval(()=>{ const m=new Date().getMinutes(); if(m!==lastMin){ lastMin=m; renderTimeline(); } }, 1000);
+  elNote.textContent="Tus cambios se guardan en este dispositivo. Edita las horas para que sea tuyo de verdad.";
+})();
+
+// Service worker: hace la app instalable y que funcione sin conexión
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
