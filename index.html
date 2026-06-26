@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="Ahora">
 <meta name="application-name" content="Ahora">
 <meta name="theme-color" content="#0a0b0f">
-<title>Ahora · Horario</title>
+<title>Ahora</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -43,6 +43,11 @@
   .seg button{font-family:var(--mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;
     background:transparent;color:var(--muted);border:0;padding:7px 9px;cursor:pointer}
   .seg button.on{background:var(--now);color:#0a0b0f;font-weight:700}
+  .top-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .fs-btn{font-family:var(--mono);font-size:.9rem;line-height:1;background:transparent;
+    color:var(--muted);border:1px solid var(--border);border-radius:9px;padding:7px 9px;cursor:pointer}
+  .fs-btn:hover{border-color:var(--now);color:var(--now)}
+  @media (display-mode:standalone),(display-mode:fullscreen){.fs-btn{display:none}}
 
   /* ── AHORA hero ────────────────────────── */
   .now{background:var(--surface);border:1px solid var(--border);border-radius:18px;
@@ -119,12 +124,18 @@
   .ebtns .reset{color:var(--muted)}
   .ebtns .reset:hover{color:var(--danger);border-color:var(--danger)}
 
-  .ics-btn{display:block;width:100%;margin-top:20px;font-family:var(--mono);font-size:.78rem;
-    letter-spacing:.03em;color:var(--now);background:transparent;border:1px solid var(--border);
-    border-radius:12px;padding:14px;cursor:pointer}
-  .ics-btn:hover{border-color:var(--now)}
-  .ics-hint{margin-top:8px;font-size:.64rem;color:var(--muted2);line-height:1.5;text-align:center}
   .note{margin-top:22px;font-size:.66rem;color:var(--muted2);line-height:1.6;text-align:center}
+  .cal{margin-top:26px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .cal .eyebrow{display:block;margin-bottom:9px}
+  .cal-help{font-size:.7rem;color:var(--muted);line-height:1.6;margin-bottom:14px}
+  .cal-help b{color:var(--text);font-weight:500}
+  .cal-btns{display:flex;flex-direction:column;gap:9px}
+  .cal-btns button{font-family:var(--mono);font-size:.74rem;letter-spacing:.04em;border-radius:9px;
+    padding:11px 13px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text);
+    width:100%;text-align:center}
+  .cal-btns #expBtn{color:var(--now);border-color:var(--now)}
+  .cal-btns #clrBtn{color:var(--muted)}
+  .cal-btns #clrBtn:hover{color:var(--danger);border-color:var(--danger)}
   button:focus-visible,input:focus-visible{outline:2px solid var(--now);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){.dot,.row.cur .tag .d{animation:none}.bar i{transition:none}}
 </style>
@@ -136,9 +147,12 @@
     <h1>AHORA</h1>
     <div class="clock" id="clock"></div>
   </div>
-  <div class="seg" id="seg">
-    <button data-type="semana">Entre sem</button>
-    <button data-type="finde">Finde</button>
+  <div class="top-actions">
+    <button class="fs-btn" id="fsBtn" aria-label="Pantalla completa" title="Pantalla completa">⛶</button>
+    <div class="seg" id="seg">
+      <button data-type="semana">Entre sem</button>
+      <button data-type="finde">Finde</button>
+    </div>
   </div>
 </div>
 
@@ -151,9 +165,6 @@
 </div>
 <ul id="timeline"></ul>
 
-<button id="icsBtn" class="ics-btn">↥ Exportar a Google Calendar (.ics)</button>
-<div class="ics-hint">Convierte cada bloque en un evento diario con aviso a su hora. Impórtalo en Google Calendar una vez y el teléfono te notifica entre tareas.</div>
-
 <div class="editor" id="editor">
   <div class="et">Editar bloques</div>
   <div class="es">Hora de inicio · emoji · qué haces. Cada bloque dura hasta que empieza el siguiente. Pon tus horas reales de trabajo, sueño y todo lo fijo.</div>
@@ -162,6 +173,15 @@
     <button class="add" id="addRow">+ Bloque</button>
     <button class="reset" id="resetBtn">↺ Plantilla</button>
     <button class="save" id="saveBtn">Guardar</button>
+  </div>
+</div>
+
+<div class="cal">
+  <span class="eyebrow">Calendario (Google)</span>
+  <p class="cal-help">Exporta tu día como eventos con aviso al inicio de cada bloque, ya con tus horas editadas. La app no puede tocar tu Google Calendar directamente: para <b>vaciarlo de forma segura</b>, importa estos eventos en un calendario aparte (uno nuevo llamado “Ahora”) y, para borrar todo, elimina ese calendario en Google Calendar. El botón de vaciar genera un archivo que <i>intenta</i> cancelar los eventos, pero Google no siempre lo respeta al importar.</p>
+  <div class="cal-btns">
+    <button id="expBtn">↓ Exportar .ics</button>
+    <button id="clrBtn">⌫ .ics para vaciar</button>
   </div>
 </div>
 
@@ -338,12 +358,13 @@
   // ── Exportar a Google Calendar (.ics) ──────────────────────────────────────
   function icsEsc(s){ return String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
   function plusMin(t,add){ let [h,m]=t.split(":").map(Number); m+=add; h+=Math.floor(m/60); m=((m%60)+60)%60; h=((h%24)+24)%24; return pad(h)+pad(m)+"00"; }
-  function buildICS(){
+  function buildICS(cancel){
     sort(store.semana); sort(store.finde);
     const now=new Date();
     const date=now.getFullYear()+pad(now.getMonth()+1)+pad(now.getDate());
     const stamp=date+"T000000Z";
-    const out=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Ahora//Horario//ES","CALSCALE:GREGORIAN"];
+    const out=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Ahora//Horario//ES","CALSCALE:GREGORIAN",
+      "METHOD:"+(cancel?"CANCEL":"PUBLISH")];
     function add(list,byday,tag){
       list.forEach((b,i)=>{
         const start=b.t.replace(":","")+"00";
@@ -356,10 +377,11 @@
           "DTSTART:"+date+"T"+start,
           "DTEND:"+date+"T"+end,
           "RRULE:FREQ=WEEKLY;BYDAY="+byday,
-          "SUMMARY:"+txt,
-          "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+txt,"TRIGGER:-PT0M","END:VALARM",
-          "END:VEVENT"
+          "SUMMARY:"+txt
         );
+        if(cancel){ out.push("STATUS:CANCELLED","SEQUENCE:1"); }
+        else { out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+txt,"TRIGGER:-PT0M","END:VALARM"); }
+        out.push("END:VEVENT");
       });
     }
     add(store.semana,"MO,TU,WE,TH,FR","sem");
@@ -367,11 +389,11 @@
     out.push("END:VCALENDAR");
     return out.join("\r\n");
   }
-  function exportICS(){
-    const blob=new Blob([buildICS()],{type:"text/calendar;charset=utf-8"});
+  function downloadICS(cancel){
+    const blob=new Blob([buildICS(cancel)],{type:"text/calendar;charset=utf-8"});
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
-    a.download="horario-ahora.ics";
+    a.download = cancel ? "ahora-vaciar.ics" : "ahora-horario.ics";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),1500);
   }
@@ -404,7 +426,32 @@
       store[activeType]=clone(DEFAULTS[activeType]); renderEditor();
     }
   });
-  $("#icsBtn").addEventListener("click", exportICS);
+  $("#expBtn").addEventListener("click", ()=>downloadICS(false));
+  $("#clrBtn").addEventListener("click", ()=>{
+    if(confirm("Descargar un archivo que intenta CANCELAR los eventos en Google Calendar.\n\nNota: Google no siempre lo respeta al importar manualmente. Lo seguro es borrar el calendario aparte donde los importaste. ¿Descargar igual?")){
+      downloadICS(true);
+    }
+  });
+
+  // ── Pantalla completa (lo más cerca posible sin instalar la PWA) ──────────
+  const fsBtn=$("#fsBtn");
+  function inFs(){ return document.fullscreenElement || document.webkitFullscreenElement; }
+  function syncFs(){ if(fsBtn) fsBtn.textContent = inFs() ? "✕" : "⛶"; }
+  if (fsBtn){
+    fsBtn.addEventListener("click", function(){
+      try{
+        if(!inFs()){
+          const el=document.documentElement;
+          (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
+        } else {
+          (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);
+        }
+      }catch(_){}
+    });
+    document.addEventListener("fullscreenchange", syncFs);
+    document.addEventListener("webkitfullscreenchange", syncFs);
+    syncFs();
+  }
 
   // ── Arranque ──────────────────────────────────────────────────────────────
   syncSeg(); renderNow(); renderTimeline();
