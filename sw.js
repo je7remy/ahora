@@ -1,5 +1,5 @@
 // Ahora — service worker (offline + instalable)
-const CACHE = 'ahora-v1';
+const CACHE = 'ahora-v7';
 const SHELL = [
   './',
   './index.html',
