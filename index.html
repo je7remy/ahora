@@ -240,7 +240,7 @@
   function ampm(h){ return h<12 ? "AM" : "PM"; }
   function h12(h){ const x=h%12; return x===0?12:x; }
   function disp12(t){ const [h,m]=t.split(":").map(Number); return h12(h)+":"+pad(m)+" "+ampm(h); }
-  function fmt(min){ const h=Math.floor(min/60)%24, m=min%60; return h12(h)+":"+pad(m)+" "+ampm(h); }
+  function fmt(min){ min=((Math.round(min)%1440)+1440)%1440; const h=Math.floor(min/60), m=min%60; return h12(h)+":"+pad(m)+" "+ampm(h); }
 
   // tipo de día: por defecto según hoy, pero el usuario puede cambiarlo en la sesión
   let activeType = ([0,6].includes(new Date().getDay())) ? "finde" : "semana";
@@ -252,20 +252,30 @@
   // ── Cálculo del bloque actual ─────────────────────────────────────────────
   function compute(now){
     const list = store[activeType];
-    const cur = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
     if (!list.length) return {state:"empty"};
-    if (cur < toMin(list[0].t)) return {state:"pre", first:list[0]};
-    let i=0;
-    for (let k=0;k<list.length;k++){ if (toMin(list[k].t) <= cur) i=k; }
-    const start = toMin(list[i].t);
-    const end   = (i+1<list.length) ? toMin(list[i+1].t) : 24*60;
-    const next  = (i+1<list.length) ? list[i+1] : null;
+    const cur = now.getHours()*60 + now.getMinutes() + now.getSeconds()/60;
+    const firstStart = toMin(list[0].t);
+    const lastIdx = list.length-1;
+    const lastStart = toMin(list[lastIdx].t);
+    let i, start, end;
+    if (cur >= lastStart){            // noche: último bloque (Dormir) hasta despertar de mañana
+      i=lastIdx; start=lastStart; end=firstStart+1440;
+    } else if (cur < firstStart){     // madrugada: sigues durmiendo
+      i=lastIdx; start=lastStart-1440; end=firstStart;
+    } else {                          // resto del día
+      i=0;
+      for (let k=0;k<list.length;k++){ if (toMin(list[k].t) <= cur) i=k; }
+      start=toMin(list[i].t);
+      end=(i+1<list.length) ? toMin(list[i+1].t) : firstStart+1440;
+    }
+    const next = (i===lastIdx) ? list[0] : list[i+1];
+    const remain = Math.max(0, Math.round(end-cur));
     return {
       state:"in", idx:i, block:list[i], next,
       start, end,
       progress: Math.max(0, Math.min(1, (cur-start)/(end-start))),
-      remain: Math.max(0, Math.round(end-cur)),
-      toNext: next ? Math.max(0, Math.round(toMin(next.t)-cur)) : null
+      remain,
+      toNext: (i===lastIdx) ? remain : Math.max(0, Math.round(toMin(next.t)-cur))
     };
   }
   function dur(min){ const h=Math.floor(min/60), m=min%60;
@@ -365,20 +375,16 @@
     function add(list,byday,tag){
       list.forEach((b,i)=>{
         const start=b.t.replace(":","")+"00";
-        const end = (i+1<list.length) ? list[i+1].t.replace(":","")+"00" : plusMin(b.t,30);
+        const isLast = (i+1>=list.length);
         const txt = icsEsc(b.e+" "+b.l);
-        out.push(
-          "BEGIN:VEVENT",
-          "UID:ahora-"+tag+"-"+i+"@local",
-          "DTSTAMP:"+stamp,
-          "DTSTART:"+date+"T"+start,
-          "DTEND:"+date+"T"+end,
-          "RRULE:FREQ=WEEKLY;BYDAY="+byday,
-          "SUMMARY:"+txt
-        );
-        if(cancel){ out.push("STATUS:CANCELLED","SEQUENCE:1"); }
-        else { out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+txt,"TRIGGER:-PT0M","END:VALARM"); }
-        out.push("END:VEVENT");
+        const ev = ["BEGIN:VEVENT","UID:ahora-"+tag+"-"+i+"@local","DTSTAMP:"+stamp,
+          "DTSTART:"+date+"T"+start];
+        if(!isLast){ ev.push("DTEND:"+date+"T"+list[i+1].t.replace(":","")+"00"); }
+        ev.push("RRULE:FREQ=WEEKLY;BYDAY="+byday,"SUMMARY:"+txt);
+        if(cancel){ ev.push("STATUS:CANCELLED","SEQUENCE:1"); }
+        else { ev.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+txt,"TRIGGER:-PT0M","END:VALARM"); }
+        ev.push("END:VEVENT");
+        out.push.apply(out, ev);
       });
     }
     add(store.semana,"MO,TU,WE,TH,FR","sem");
